@@ -1,0 +1,38 @@
+name: urbanfootball_app
+description: "UrbanFootball WebView App"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # WebView (iOS 안정 버전)
+  webview_flutter: ^4.13.1
+
+  # Firebase (iOS 15 + 최신 안정)
+  firebase_core: ^4.4.0
+  firebase_messaging: ^16.1.1
+
+  # Notifications
+  flutter_local_notifications: ^17.2.1
+
+  # Utils
+  http: ^1.2.0
+  shared_preferences: ^2.2.2
+  package_info_plus: ^9.0.0
+  url_launcher: ^6.2.1
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

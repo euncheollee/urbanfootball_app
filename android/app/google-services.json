@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "929011511050",
+    "project_id": "urbanfootball-d4e70",
+    "storage_bucket": "urbanfootball-d4e70.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:929011511050:android:98080b97e80fc6813f54f3",
+        "android_client_info": {
+          "package_name": "com.example.urbanfootball_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwaVqtRIG7FTewC6fIVYO_HMY4Qpe8mqo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
