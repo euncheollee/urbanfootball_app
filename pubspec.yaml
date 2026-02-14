@@ -45,9 +45,10 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icon.png"
+  image_path: "assets/icon_ios.png"
   remove_alpha_ios: true
-
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon_android_fg.png"
 
 # 🔹 스플래시 설정
 flutter_native_splash:
@@ -60,7 +61,3 @@ flutter_native_splash:
 
 flutter:
   uses-material-design: true
-
-  assets:
-    - assets/icon.png
-    - assets/splash.png
