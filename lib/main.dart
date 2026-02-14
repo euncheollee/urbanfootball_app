@@ -2,17 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import 'update_checker.dart';
-import 'update_dialog.dart';
-
 /// ===============================
-/// 🔔 Local Notifications (v20 API)
+/// 🔔 Local Notifications
 /// ===============================
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -31,14 +26,17 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 }
 
+/// ===============================
+/// MAIN
+/// ===============================
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  /// background handler
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  FirebaseMessaging.onBackgroundMessage(
+    _firebaseMessagingBackgroundHandler,
+  );
 
-  /// Local notification init (v20)
   const initializationSettings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     iOS: DarwinInitializationSettings(),
@@ -46,28 +44,21 @@ Future<void> main() async {
 
   await flutterLocalNotificationsPlugin.initialize(
     initializationSettings,
-    onDidReceiveNotificationResponse: (NotificationResponse response) {
-      _NotificationRouter.handle(response.payload);
-    },
   );
 
-  /// Android notification channel
   if (Platform.isAndroid) {
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(androidChannel);
   }
 
-  /// permission (iOS 필수)
   await FirebaseMessaging.instance.requestPermission(
     alert: true,
     badge: true,
     sound: true,
   );
 
-  /// iOS foreground 표시
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true,
     badge: true,
@@ -78,7 +69,7 @@ Future<void> main() async {
 }
 
 /// ===============================
-/// Notification Router
+/// 🔀 Notification Router
 /// ===============================
 class _NotificationRouter {
   static WebViewController? _controller;
@@ -118,22 +109,27 @@ class _NotificationRouter {
 }
 
 /// ===============================
-/// App
+/// APP
 /// ===============================
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: WebViewPage(),
-    );
+return MaterialApp(
+  debugShowCheckedModeBanner: false,
+  theme: ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: Colors.blue, // ← 원하는 색
+    ),
+  ),
+  home: const WebViewPage(),
+);
   }
 }
 
 /// ===============================
-/// WebView Page
+/// 🌐 WebView Page
 /// ===============================
 class WebViewPage extends StatefulWidget {
   const WebViewPage({super.key});
@@ -144,9 +140,9 @@ class WebViewPage extends StatefulWidget {
 
 class _WebViewPageState extends State<WebViewPage> {
   late final WebViewController _controller;
-
-  /// terminated 상태 진입용
   String? _pendingUrl;
+
+  static const String _homeUrl = 'http://ec521.tplinkdns.com:8080';
 
   @override
   void initState() {
@@ -154,26 +150,93 @@ class _WebViewPageState extends State<WebViewPage> {
 
     _setupFcmListeners();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (await shouldShowUpdatePopup()) {
-        showDialog(
-          context: context,
-          barrierDismissible: true,
-          builder: (_) => const UpdateDialog(),
-        );
-      }
-    });
-
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent('Mozilla/5.0 (UrbanFootballApp WebView)')
+
+      /// 🔥 alert 처리
+      ..setOnJavaScriptAlertDialog(
+        (JavaScriptAlertDialogRequest request) async {
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text("알림"),
+              content: Text(request.message),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("확인"),
+                ),
+              ],
+            ),
+          );
+        },
+      )
+
+      /// 🔥 confirm 처리
+      ..setOnJavaScriptConfirmDialog(
+        (JavaScriptConfirmDialogRequest request) async {
+          return await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("확인"),
+                  content: Text(request.message),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("취소"),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text("확인"),
+                    ),
+                  ],
+                ),
+              ) ??
+              false;
+        },
+      )
+
+      /// 🔥 prompt 처리 (컴파일 오류 수정 완료)
+      ..setOnJavaScriptTextInputDialog(
+        (JavaScriptTextInputDialogRequest request) async {
+          final controller =
+              TextEditingController(text: request.defaultText ?? "");
+
+          final result = await showDialog<String?>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text("입력"),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text("취소"),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(context, controller.text),
+                  child: const Text("확인"),
+                ),
+              ],
+            ),
+          );
+
+          return result ?? "";
+        },
+      )
+
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (_) async {
             _NotificationRouter.attach(_controller);
 
-            /// token 전달
-            final token = await FirebaseMessaging.instance.getToken();
+            final token =
+                await FirebaseMessaging.instance.getToken();
+
             if (token != null) {
               _controller.runJavaScript(
                 "window.onFlutterFCMToken && window.onFlutterFCMToken('$token');",
@@ -186,12 +249,14 @@ class _WebViewPageState extends State<WebViewPage> {
             }
           },
         ),
-      )
-      ..loadRequest(Uri.parse('http://ec521.tplinkdns.com:8080'));
+      );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.loadRequest(Uri.parse(_homeUrl));
+    });
   }
 
   void _setupFcmListeners() {
-    /// terminated → click
     FirebaseMessaging.instance.getInitialMessage().then((message) {
       final url = message?.data['url'];
       if (url != null && url.isNotEmpty) {
@@ -199,21 +264,15 @@ class _WebViewPageState extends State<WebViewPage> {
       }
     });
 
-    /// background → click
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      final url = message.data['url'];
-      _NotificationRouter.handle(url);
+      _NotificationRouter.handle(message.data['url']);
     });
 
-    /// foreground receive
     FirebaseMessaging.onMessage.listen((message) async {
       final notification = message.notification;
       if (notification == null) return;
-
-      /// iOS: OS(AppDelegate)가 표시
       if (!Platform.isAndroid) return;
 
-      /// Android foreground → local notification (v20)
       flutterLocalNotificationsPlugin.show(
         notification.hashCode,
         notification.title,
@@ -235,7 +294,9 @@ class _WebViewPageState extends State<WebViewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(child: WebViewWidget(controller: _controller)),
+      body: SafeArea(
+        child: WebViewWidget(controller: _controller),
+      ),
     );
   }
 }

@@ -1,34 +1,29 @@
 import UIKit
 import Flutter
-import FirebaseCore
-import UserNotifications
 
-@UIApplicationMain
-@objc class AppDelegate: FlutterAppDelegate, UNUserNotificationCenterDelegate {
+@main
+@objc class AppDelegate: UIResponder, UIApplicationDelegate {
 
-  override func application(
+  var window: UIWindow?
+
+  func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
-    // Firebase 초기화
-    FirebaseApp.configure()
+    let flutterViewController = FlutterViewController(
+      project: nil,
+      nibName: nil,
+      bundle: nil
+    )
 
-    // iOS 포그라운드 알림 표시
-    UNUserNotificationCenter.current().delegate = self
+    let window = UIWindow(frame: UIScreen.main.bounds)
+    window.rootViewController = flutterViewController
+    window.makeKeyAndVisible()
+    self.window = window
 
-    // APNs 등록
-    application.registerForRemoteNotifications()
+    GeneratedPluginRegistrant.register(with: flutterViewController)
 
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
-  // 앱이 포그라운드일 때도 배너 표시
-  override func userNotificationCenter(
-    _ center: UNUserNotificationCenter,
-    willPresent notification: UNNotification,
-    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-  ) {
-    completionHandler([.banner, .sound, .badge])
+    return true
   }
 }
