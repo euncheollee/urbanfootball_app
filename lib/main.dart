@@ -213,21 +213,26 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
 
   /// 🔔 권한 체크 (기존 구조 유지 + 즉시 반영 개선)
   Future<void> _checkNotificationPermission() async {
-    final status = await Permission.notification.status;
-    final isAuthorized = status.isGranted;
+    final settings = await FirebaseMessaging.instance.getNotificationSettings();
+
+    final isAuthorized =
+        settings.authorizationStatus == AuthorizationStatus.authorized;
 
     await _controller.runJavaScript("""
-      (function waitForBanner(){
+      (function(){
         var banner = document.getElementById('devicePushBanner');
-        if(!banner){
-          setTimeout(waitForBanner, 150);
-          return;
-        }
+        if(!banner) return;
+
+        banner.style.transition = "opacity 0.15s ease";
 
         if (${isAuthorized ? "true" : "false"}) {
-          banner.style.display = "none";
+          banner.style.opacity = "0";
+          setTimeout(function(){
+            banner.style.display = "none";
+          },150);
         } else {
           banner.style.display = "block";
+          banner.style.opacity = "1";
         }
       })();
     """);
@@ -235,18 +240,33 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
 
   /// 🔄 설정 다녀오면 자동 새로고침
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed && _openedSetting) {
       _openedSetting = false;
-      _handleReturnFromSetting();
-    }
-  }
 
-  Future<void> _handleReturnFromSetting() async {
-    // iOS 갱신 지연 대비 2회 체크
-    await _checkNotificationPermission();
-    await Future.delayed(const Duration(milliseconds: 500));
-    await _checkNotificationPermission();
+      // 🔥 OS 권한 반영 대기 (iOS 필수)
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      final settings = await FirebaseMessaging.instance
+          .getNotificationSettings();
+
+      final isAuthorized =
+          settings.authorizationStatus == AuthorizationStatus.authorized;
+
+      await _controller.runJavaScript("""
+      (function(){
+        var banner = document.getElementById('devicePushBanner');
+        if(!banner) return;
+
+        if ($isAuthorized) {
+          banner.remove(); // 가장 확실
+        } else {
+          banner.style.display = "block";
+          banner.style.opacity = "1";
+        }
+      })();
+    """);
+    }
   }
 
   Future<void> _kakaoLogin() async {
