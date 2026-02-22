@@ -1,14 +1,14 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'update_checker.dart';
+import 'update_dialog.dart';
 
-/// ===============================
-/// 🔔 Local Notifications
-/// ===============================
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
@@ -19,37 +19,30 @@ const AndroidNotificationChannel androidChannel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
-/// ===============================
-/// 🔔 Background FCM handler
-/// ===============================
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 }
 
-/// ===============================
-/// MAIN
-/// ===============================
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  FirebaseMessaging.onBackgroundMessage(
-    _firebaseMessagingBackgroundHandler,
-  );
+  KakaoSdk.init(nativeAppKey: 'c4eccd1ba39a995ee1e328d590538e0f');
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   const initializationSettings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     iOS: DarwinInitializationSettings(),
   );
 
-  await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings,
-  );
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   if (Platform.isAndroid) {
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(androidChannel);
   }
 
@@ -78,9 +71,7 @@ class _NotificationRouter {
   static const String _baseUrl = 'http://ec521.tplinkdns.com:8080';
 
   static String _normalize(String url) {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url;
-    }
+    if (url.startsWith('http')) return url;
     if (!url.startsWith('/')) url = '/$url';
     return '$_baseUrl$url';
   }
@@ -108,29 +99,18 @@ class _NotificationRouter {
   }
 }
 
-/// ===============================
-/// APP
-/// ===============================
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-return MaterialApp(
-  debugShowCheckedModeBanner: false,
-  theme: ThemeData(
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.blue, // ← 원하는 색
-    ),
-  ),
-  home: const WebViewPage(),
-);
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: WebViewPage(),
+    );
   }
 }
 
-/// ===============================
-/// 🌐 WebView Page
-/// ===============================
 class WebViewPage extends StatefulWidget {
   const WebViewPage({super.key});
 
@@ -138,104 +118,62 @@ class WebViewPage extends StatefulWidget {
   State<WebViewPage> createState() => _WebViewPageState();
 }
 
-class _WebViewPageState extends State<WebViewPage> {
+class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   late final WebViewController _controller;
+
+  bool _isLoading = false;
+  bool _showBackButton = false;
+  bool _openedSetting = false;
+
   String? _pendingUrl;
 
+  static const String _baseUrl = 'http://ec521.tplinkdns.com:8080';
   static const String _homeUrl = 'http://ec521.tplinkdns.com:8080';
 
   @override
   void initState() {
     super.initState();
 
+    _checkUpdatePopup(); // 🔥 버전 확인
+
+    WidgetsBinding.instance.addObserver(this);
+
     _setupFcmListeners();
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent('Mozilla/5.0 (UrbanFootballApp WebView)')
-
-      /// 🔥 alert 처리
-      ..setOnJavaScriptAlertDialog(
-        (JavaScriptAlertDialogRequest request) async {
-          await showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text("알림"),
-              content: Text(request.message),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("확인"),
-                ),
-              ],
-            ),
-          );
+      /// 🔹 Kakao Bridge 유지
+      ..addJavaScriptChannel(
+        'KakaoBridge',
+        onMessageReceived: (message) async {
+          if (message.message == 'login') {
+            await _kakaoLogin();
+          }
         },
       )
-
-      /// 🔥 confirm 처리
-      ..setOnJavaScriptConfirmDialog(
-        (JavaScriptConfirmDialogRequest request) async {
-          return await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text("확인"),
-                  content: Text(request.message),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text("취소"),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text("확인"),
-                    ),
-                  ],
-                ),
-              ) ??
-              false;
+      /// 🔹 설정 이동 브릿지 추가
+      ..addJavaScriptChannel(
+        'AppChannel',
+        onMessageReceived: (message) async {
+          if (message.message == "openAppSettings") {
+            _openedSetting = true;
+            await openAppSettings();
+          }
         },
       )
-
-      /// 🔥 prompt 처리 (컴파일 오류 수정 완료)
-      ..setOnJavaScriptTextInputDialog(
-        (JavaScriptTextInputDialogRequest request) async {
-          final controller =
-              TextEditingController(text: request.defaultText ?? "");
-
-          final result = await showDialog<String?>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text("입력"),
-              content: TextField(
-                controller: controller,
-                autofocus: true,
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, null),
-                  child: const Text("취소"),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      Navigator.pop(context, controller.text),
-                  child: const Text("확인"),
-                ),
-              ],
-            ),
-          );
-
-          return result ?? "";
-        },
-      )
-
       ..setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: (request) {
+            final url = request.url;
+            setState(() {
+              _showBackButton = !url.startsWith(_baseUrl);
+            });
+            return NavigationDecision.navigate;
+          },
           onPageFinished: (_) async {
             _NotificationRouter.attach(_controller);
 
-            final token =
-                await FirebaseMessaging.instance.getToken();
+            final token = await FirebaseMessaging.instance.getToken();
 
             if (token != null) {
               _controller.runJavaScript(
@@ -247,6 +185,9 @@ class _WebViewPageState extends State<WebViewPage> {
               _NotificationRouter.handle(_pendingUrl);
               _pendingUrl = null;
             }
+
+            /// 🔔 권한 체크
+            await _checkNotificationPermission();
           },
         ),
       );
@@ -254,6 +195,114 @@ class _WebViewPageState extends State<WebViewPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.loadRequest(Uri.parse(_homeUrl));
     });
+  }
+
+  /// 앱 버전 확인
+  Future<void> _checkUpdatePopup() async {
+    final show = await shouldShowUpdatePopup();
+    if (!show) return;
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => UpdateDialog(),
+    );
+  }
+
+  /// 🔔 권한 체크
+  Future<void> _checkNotificationPermission() async {
+    final settings = await FirebaseMessaging.instance.getNotificationSettings();
+
+    print("알림 권한 상태: ${settings.authorizationStatus}");
+
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      // 🔹 알림 ON → 배너 숨김
+      await _controller.runJavaScript("""
+        var banner = document.getElementById('devicePushBanner');
+        if (banner) {
+          banner.style.display = 'none';
+        }
+      """);
+    } else {
+      // 🔹 알림 OFF → 배너 표시
+      await _controller.runJavaScript("""
+        var banner = document.getElementById('devicePushBanner');
+        if (banner) {
+          banner.style.display = 'block';
+        }
+      """);
+    }
+  }
+
+  /// 🔄 설정 다녀오면 자동 새로고침
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed && _openedSetting) {
+      _openedSetting = false;
+
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      await _checkNotificationPermission();
+    }
+  }
+
+  Future<void> _kakaoLogin() async {
+    try {
+      setState(() => _isLoading = true);
+
+      OAuthToken token;
+
+      if (await isKakaoTalkInstalled()) {
+        token = await UserApi.instance.loginWithKakaoTalk();
+      } else {
+        token = await UserApi.instance.loginWithKakaoAccount();
+      }
+
+      final user = await UserApi.instance.me();
+
+      final js =
+          """
+fetch('/result/member_login_ok.php', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+  body: new URLSearchParams({
+    mode: 'member_sns_login',
+    site: 'cacao',
+    id: '${user.id}',
+    nick_name: '${user.kakaoAccount?.profile?.nickname ?? ""}',
+    email: '${user.kakaoAccount?.email ?? ""}',
+    access_token: '${token.accessToken}',
+    type: 'login'
+  })
+})
+.then(res => res.text())
+.then(data => {
+  if (data.includes("ok|!|")) {
+    window.location.href='/m/main/index.html';
+  } else if (data.includes("new|!|")) {
+    window.location.href='/m/member/member_join.html';
+  } else {
+    alert("로그인 실패");
+  }
+});
+""";
+
+      await _controller.runJavaScript(js);
+    } catch (e) {
+      if (mounted) {
+        await _controller.runJavaScript(
+          "alert('카카오 로그인에 실패했습니다. 다시 시도해주세요.');",
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _setupFcmListeners() {
@@ -293,9 +342,43 @@ class _WebViewPageState extends State<WebViewPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: WebViewWidget(controller: _controller),
+    return WillPopScope(
+      onWillPop: () async {
+        if (await _controller.canGoBack()) {
+          _controller.goBack();
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        appBar: _showBackButton
+            ? AppBar(
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () async {
+                    if (await _controller.canGoBack()) {
+                      _controller.goBack();
+                    }
+                  },
+                ),
+              )
+            : null,
+        body: Stack(
+          children: [
+            WebViewWidget(controller: _controller),
+            if (_isLoading)
+              const ColoredBox(
+                color: Color(0x80000000),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFF00CD00),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

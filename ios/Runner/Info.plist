@@ -62,5 +62,19 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<true/>
+		
+		<key>CFBundleURLTypes</key>
+		<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+			<string>kakaoc4eccd1ba39a995ee1e328d590538e0f</string>
+			</array>
+		</dict>
+		</array>
+
+		<key>FirebaseMessagingAutoInitEnabled</key>
+		<true/>
+		
 	</dict>
 </plist>
