@@ -211,31 +211,31 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
     );
   }
 
-  /// 🔔 권한 체크
+  /// 🔔 권한 체크 (기존 구조 유지 + 즉시 반영 개선)
   Future<void> _checkNotificationPermission() async {
     final settings = await FirebaseMessaging.instance.getNotificationSettings();
 
-    print("알림 권한 상태: ${settings.authorizationStatus}");
+    final isAuthorized =
+        settings.authorizationStatus == AuthorizationStatus.authorized;
 
-    await Future.delayed(const Duration(milliseconds: 300));
+    await _controller.runJavaScript("""
+      (function(){
+        var banner = document.getElementById('devicePushBanner');
+        if(!banner) return;
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      // 🔹 알림 ON → 배너 숨김
-      await _controller.runJavaScript("""
-        var banner = document.getElementById('devicePushBanner');
-        if (banner) {
-          banner.style.display = 'none';
+        banner.style.transition = "opacity 0.15s ease";
+
+        if (${isAuthorized ? "true" : "false"}) {
+          banner.style.opacity = "0";
+          setTimeout(function(){
+            banner.style.display = "none";
+          },150);
+        } else {
+          banner.style.display = "block";
+          banner.style.opacity = "1";
         }
-      """);
-    } else {
-      // 🔹 알림 OFF → 배너 표시
-      await _controller.runJavaScript("""
-        var banner = document.getElementById('devicePushBanner');
-        if (banner) {
-          banner.style.display = 'block';
-        }
-      """);
-    }
+      })();
+    """);
   }
 
   /// 🔄 설정 다녀오면 자동 새로고침
@@ -243,9 +243,6 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed && _openedSetting) {
       _openedSetting = false;
-
-      await Future.delayed(const Duration(milliseconds: 300));
-
       await _checkNotificationPermission();
     }
   }
@@ -363,21 +360,25 @@ fetch('/result/member_login_ok.php', {
                 ),
               )
             : null,
-        body: Stack(
-          children: [
-            WebViewWidget(controller: _controller),
-            if (_isLoading)
-              const ColoredBox(
-                color: Color(0x80000000),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFF00CD00),
+        body: SafeArea(
+          top: true,
+          bottom: false,
+          child: Stack(
+            children: [
+              WebViewWidget(controller: _controller),
+              if (_isLoading)
+                const ColoredBox(
+                  color: Color(0x80000000),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Color(0xFF00CD00),
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
