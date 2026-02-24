@@ -242,13 +242,25 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
-      await Future.delayed(const Duration(milliseconds: 400));
+      AuthorizationStatus? finalStatus;
 
-      final settings = await FirebaseMessaging.instance
-          .getNotificationSettings();
+      // 🔥 최대 1초 동안 100ms 간격으로 권한 상태 확인
+      for (int i = 0; i < 10; i++) {
+        final settings = await FirebaseMessaging.instance
+            .getNotificationSettings();
 
-      final isAuthorized =
-          settings.authorizationStatus == AuthorizationStatus.authorized;
+        finalStatus = settings.authorizationStatus;
+
+        // 상태가 확정되면 즉시 탈출
+        if (finalStatus == AuthorizationStatus.authorized ||
+            finalStatus == AuthorizationStatus.denied) {
+          break;
+        }
+
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      final isAuthorized = finalStatus == AuthorizationStatus.authorized;
 
       await _controller.runJavaScript("""
         (function(){
@@ -265,8 +277,7 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
             banner.style.opacity = "1";
           }
 
-          // 🔥 강제 reflow (WebView 안정화)
-          banner.offsetHeight;
+          banner.offsetHeight; // 🔥 강제 reflow
         })();
       """);
     }
