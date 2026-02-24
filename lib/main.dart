@@ -242,7 +242,7 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     if (state == AppLifecycleState.resumed) {
-      await Future.delayed(const Duration(milliseconds: 800));
+      await Future.delayed(const Duration(milliseconds: 400));
 
       final settings = await FirebaseMessaging.instance
           .getNotificationSettings();
@@ -254,6 +254,8 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
         (function(){
           var banner = document.getElementById('devicePushBanner');
           if(!banner) return;
+
+          banner.style.transition = "opacity 0.15s ease";
 
           if ($isAuthorized) {
             banner.style.opacity = "0";
