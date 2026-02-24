@@ -241,11 +241,8 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   /// 🔄 설정 다녀오면 자동 새로고침
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (state == AppLifecycleState.resumed && _openedSetting) {
-      _openedSetting = false;
-
-      // 🔥 OS 권한 반영 대기 (iOS 필수)
-      await Future.delayed(const Duration(milliseconds: 200));
+    if (state == AppLifecycleState.resumed) {
+      await Future.delayed(const Duration(milliseconds: 800));
 
       final settings = await FirebaseMessaging.instance
           .getNotificationSettings();
@@ -254,18 +251,18 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
           settings.authorizationStatus == AuthorizationStatus.authorized;
 
       await _controller.runJavaScript("""
-      (function(){
-        var banner = document.getElementById('devicePushBanner');
-        if(!banner) return;
+        (function(){
+          var banner = document.getElementById('devicePushBanner');
+          if(!banner) return;
 
-        if ($isAuthorized) {
-          banner.remove(); // 가장 확실
-        } else {
-          banner.style.display = "block";
-          banner.style.opacity = "1";
-        }
-      })();
-    """);
+          if ($isAuthorized) {
+            banner.remove();
+          } else {
+            banner.style.display = "block";
+            banner.style.opacity = "1";
+          }
+        })();
+      """);
     }
   }
 
@@ -404,5 +401,11 @@ fetch('/result/member_login_ok.php', {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 }
