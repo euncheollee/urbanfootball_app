@@ -256,11 +256,15 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
           if(!banner) return;
 
           if ($isAuthorized) {
-            banner.remove();
+            banner.style.opacity = "0";
+            banner.style.display = "none";
           } else {
             banner.style.display = "block";
             banner.style.opacity = "1";
           }
+
+          // 🔥 강제 reflow (WebView 안정화)
+          banner.offsetHeight;
         })();
       """);
     }
