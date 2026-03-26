@@ -400,7 +400,7 @@ fetch('/result/member_login_ok.php', {
             : null,
         body: SafeArea(
           top: true,
-          bottom: false,
+          bottom: true,
           child: Stack(
             children: [
               WebViewWidget(controller: _controller),
