@@ -142,6 +142,199 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent('Mozilla/5.0 (UrbanFootballApp WebView)')
+      /// 🔥 alert 처리
+      /// ===============================
+      /// 🔥 JS Alert
+      /// ===============================
+      ..setOnJavaScriptAlertDialog((
+        JavaScriptAlertDialogRequest request,
+      ) async {
+        await showDialog(
+          context: context,
+          builder: (context) {
+            final uri = Uri.tryParse(request.url ?? "");
+            final domain = uri?.origin ?? request.url ?? "";
+
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "'$domain' 페이지 내용:",
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(request.message, style: const TextStyle(fontSize: 15)),
+                    const SizedBox(height: 20),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          "확인",
+                          style: TextStyle(
+                            color: Color(0xFF00A86B),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      })
+      /// ===============================
+      /// 🔥 JS Confirm
+      /// ===============================
+      ..setOnJavaScriptConfirmDialog((
+        JavaScriptConfirmDialogRequest request,
+      ) async {
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            final uri = Uri.tryParse(request.url ?? "");
+            final domain = uri?.origin ?? request.url ?? "";
+
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "'$domain' 페이지 내용:",
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(request.message),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text(
+                            "취소",
+                            style: TextStyle(
+                              color: Color.fromARGB(255, 48, 48, 48),
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text(
+                            "확인",
+                            style: TextStyle(color: Color(0xFF00A86B)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+
+        return result ?? false;
+      })
+      /// ===============================
+      /// 🔥 JS Prompt
+      /// ===============================
+      ..setOnJavaScriptTextInputDialog((
+        JavaScriptTextInputDialogRequest request,
+      ) async {
+        final controller = TextEditingController(
+          text: request.defaultText ?? "",
+        );
+
+        final result = await showDialog<String?>(
+          context: context,
+          builder: (context) {
+            final uri = Uri.tryParse(request.url ?? "");
+            final domain = uri?.origin ?? request.url ?? "";
+
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "'$domain' 페이지 내용:",
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    Text(request.message),
+
+                    const SizedBox(height: 12),
+
+                    TextField(controller: controller, autofocus: true),
+
+                    const SizedBox(height: 20),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, null),
+                          child: const Text(
+                            "취소",
+                            style: TextStyle(
+                              color: Color.fromARGB(255, 48, 48, 48),
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.pop(context, controller.text),
+                          child: const Text(
+                            "확인",
+                            style: TextStyle(color: Color(0xFF00A86B)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+
+        return result ?? "";
+      })
       /// 🔹 Kakao Bridge 유지
       ..addJavaScriptChannel(
         'KakaoBridge',
