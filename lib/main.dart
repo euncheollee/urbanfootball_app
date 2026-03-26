@@ -351,14 +351,16 @@ fetch('/result/member_login_ok.php', {
     });
 
     FirebaseMessaging.onMessage.listen((message) async {
-      final notification = message.notification;
-      if (notification == null) return;
       if (!Platform.isAndroid) return;
 
+      final raw = message.notification?.body ?? "";
+
+      final body = raw.replaceAll("\\n", "\n");
+
       flutterLocalNotificationsPlugin.show(
-        notification.hashCode,
-        notification.title,
-        notification.body,
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        message.notification?.title ?? "",
+        body,
         NotificationDetails(
           android: AndroidNotificationDetails(
             androidChannel.id,
@@ -366,9 +368,9 @@ fetch('/result/member_login_ok.php', {
             channelDescription: androidChannel.description,
             importance: Importance.high,
             priority: Priority.high,
+            styleInformation: BigTextStyleInformation(body),
           ),
         ),
-        payload: message.data['url'],
       );
     });
   }
