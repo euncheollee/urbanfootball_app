@@ -401,45 +401,6 @@ fetch('/result/member_login_ok.php', {
         }
       }
     });
-
-    // 🔥 포그라운드 수신
-    FirebaseMessaging.onMessage.listen((message) async {
-      print("🔥 onMessage 들어옴"); // 꼭 확인
-      final rawTitle = message.data['title'] ?? "";
-      final rawBody = message.data['body'] ?? "";
-
-      final title = rawTitle.replaceAll(r'\\\"', '"').replaceAll(r'\"', '"');
-
-      final body = rawBody
-          .replaceAll(r'\\\"', '"')
-          .replaceAll(r'\"', '"')
-          .replaceAll("\\n", "\n");
-
-      flutterLocalNotificationsPlugin.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        title,
-        body,
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            androidChannel.id,
-            androidChannel.name,
-            channelDescription: androidChannel.description,
-            importance: Importance.high,
-            priority: Priority.high,
-            styleInformation: BigTextStyleInformation(body),
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true, // 🔥 핵심
-            presentBadge: true,
-            presentSound: true,
-          ),
-        ),
-        payload: message.data['url']?.toString() ?? '',
-      );
-
-      final count = await fetchUnreadCount();
-      updateBadge(count);
-    });
   }
 
   @override
