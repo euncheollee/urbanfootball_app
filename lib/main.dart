@@ -493,10 +493,26 @@ fetch('/result/member_login_ok.php', {
                   );
                 },
                 shouldOverrideUrlLoading: (controller, navigationAction) async {
-                  final url = navigationAction.request.url?.toString() ?? '';
+                  final uri = navigationAction.request.url;
+                  if (uri == null) return NavigationActionPolicy.ALLOW;
+
+                  final url = uri.toString();
+
                   setState(() {
                     _showBackButton = !url.startsWith(_baseUrl);
                   });
+
+                  // 🔥 핵심: /m/ 없으면 모바일로 강제 이동
+                  if (url.contains(_baseUrl) && !url.contains('/m/')) {
+                    final newUrl = url.replaceFirst(_baseUrl, '$_baseUrl/m');
+
+                    await controller.loadUrl(
+                      urlRequest: URLRequest(url: WebUri(newUrl)),
+                    );
+
+                    return NavigationActionPolicy.CANCEL;
+                  }
+
                   return NavigationActionPolicy.ALLOW;
                 },
                 onLoadStop: (controller, url) async {
