@@ -166,17 +166,33 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   }
 
   Future<int> fetchUnreadCount() async {
-    try {
-      final res = await http.get(Uri.parse("$_baseUrl/api/unread_count.php"));
-      return int.tryParse(res.body) ?? 0;
-    } catch (e) {
-      return 0;
-    }
+    final rawUserId = await _webViewController?.evaluateJavascript(
+      source: "window.LOGIN_USER_ID",
+    );
+
+    // 🔥 따옴표 제거
+    final userId = rawUserId?.toString().replaceAll('"', '') ?? '';
+
+    if (userId.isEmpty) return 0;
+
+    final res = await http.get(
+      Uri.parse("$_baseUrl/api/unread_count.php?user_id=$userId"),
+    );
+
+    return int.tryParse(res.body) ?? 0;
   }
 
   void updateBadge(int count) async {
-    // iOS는 서버 badge 사용 → 여기선 아무것도 안함
-    // Android 대응하려면 나중에 별도 처리
+    if (!Platform.isIOS) return;
+
+    final isSupported = await FlutterAppBadger.isAppBadgeSupported();
+    if (!isSupported) return;
+
+    if (count > 0) {
+      await FlutterAppBadger.updateBadgeCount(count);
+    } else {
+      await FlutterAppBadger.removeBadge();
+    }
   }
 
   /// 앱 버전 확인
@@ -514,6 +530,21 @@ fetch('/result/member_login_ok.php', {
                 onLoadStop: (controller, url) async {
                   _currentUrl = url?.toString() ?? "";
                   _NotificationRouter.attach(controller);
+
+                  controller.addJavaScriptHandler(
+                    handlerName: 'AppChannel',
+                    callback: (args) async {
+                      print("🔥 badge_sync 호출됨: $args");
+
+                      if (args.isNotEmpty && args.first == 'badge_sync') {
+                        final count = await fetchUnreadCount();
+                        print("🔥 count: $count");
+                        updateBadge(count);
+                      }
+
+                      return null;
+                    },
+                  );
 
                   final token = await FirebaseMessaging.instance.getToken();
 
