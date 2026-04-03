@@ -183,9 +183,8 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   }
 
   void updateBadge(int count) async {
-    if (!Platform.isIOS) return;
-
     final isSupported = await FlutterAppBadger.isAppBadgeSupported();
+
     if (!isSupported) return;
 
     if (count > 0) {
