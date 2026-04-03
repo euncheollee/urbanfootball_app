@@ -13,6 +13,7 @@ dependencies:
 
   # WebView
   webview_flutter: ^4.13.1
+  flutter_inappwebview: ^6.0.0
 
   # Firebase
   firebase_core: ^4.4.0

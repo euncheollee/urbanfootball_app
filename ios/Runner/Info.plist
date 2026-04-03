@@ -61,20 +61,21 @@
 		<key>UIStatusBarHidden</key>
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
-		<true/>
-		
+		<false/>
 		<key>CFBundleURLTypes</key>
 		<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-			<string>kakaoc4eccd1ba39a995ee1e328d590538e0f</string>
-			</array>
-		</dict>
+			<dict>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>kakaoc4eccd1ba39a995ee1e328d590538e0f</string>
+				</array>
+			</dict>
 		</array>
-
 		<key>FirebaseMessagingAutoInitEnabled</key>
 		<true/>
-		
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>사진 업로드를 위해 필요합니다.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>사진 촬영을 위해 필요합니다.</string>
 	</dict>
 </plist>
