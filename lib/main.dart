@@ -428,6 +428,11 @@ fetch('/result/member_login_ok.php', {
             priority: Priority.high,
             styleInformation: BigTextStyleInformation(body),
           ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true, // 🔥 핵심
+            presentBadge: true,
+            presentSound: true,
+          ),
         ),
         payload: message.data['url']?.toString() ?? '',
       );
