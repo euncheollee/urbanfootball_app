@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'update_checker.dart';
 import 'update_dialog.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_app_badger/flutter_app_badger.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
