@@ -155,6 +155,13 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
     _checkUpdatePopup();
     WidgetsBinding.instance.addObserver(this);
     _setupFcmListeners();
+
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+      await _webViewController?.evaluateJavascript(
+        source:
+            "window.onFlutterFCMToken && window.onFlutterFCMToken('$newToken');",
+      );
+    });
   }
 
   Future<int> fetchUnreadCount() async {
@@ -166,8 +173,9 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
     }
   }
 
-  void updateBadge(int count) {
-    //
+  void updateBadge(int count) async {
+    // iOS는 서버 badge 사용 → 여기선 아무것도 안함
+    // Android 대응하려면 나중에 별도 처리
   }
 
   /// 앱 버전 확인
@@ -326,20 +334,18 @@ fetch('/result/member_login_ok.php', {
   }
 
   void _setupFcmListeners() {
-    FirebaseMessaging.instance.getInitialMessage().then((message) {
-      final url = message?.data['url'];
-      if (url != null && url.isNotEmpty) {
-        _pendingUrl = url;
-      }
-    });
-
     // 🔥 앱 실행 중 → 클릭
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+    FirebaseMessaging.onMessageOpenedApp.listen((message) async {
       final url = message.data['url'];
 
       if (url != null && url.isNotEmpty) {
-        _NotificationRouter.handle(url);
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _NotificationRouter.handle(url);
+        });
       }
+
+      final count = await fetchUnreadCount();
+      updateBadge(count);
     });
 
     // 🔥 앱 종료 상태 → 클릭
@@ -353,9 +359,8 @@ fetch('/result/member_login_ok.php', {
       }
     });
 
+    // 🔥 포그라운드 수신
     FirebaseMessaging.onMessage.listen((message) async {
-      if (Platform.isAndroid) return;
-
       final rawTitle = message.data['title'] ?? "";
       final rawBody = message.data['body'] ?? "";
 
@@ -380,10 +385,9 @@ fetch('/result/member_login_ok.php', {
             styleInformation: BigTextStyleInformation(body),
           ),
         ),
-        payload: message.data['url'], // 🔥 이거 추가
+        payload: message.data['url']?.toString() ?? '',
       );
 
-      // 🔥 핵심
       final count = await fetchUnreadCount();
       updateBadge(count);
     });
@@ -488,6 +492,13 @@ fetch('/result/member_login_ok.php', {
                         _openedSetting = true;
                         await openAppSettings();
                       }
+
+                      // 🔥 추가
+                      if (args.isNotEmpty && args.first == 'badge_sync') {
+                        final count = await fetchUnreadCount();
+                        updateBadge(count);
+                      }
+
                       return null;
                     },
                   );
@@ -506,6 +517,14 @@ fetch('/result/member_login_ok.php', {
                   final token = await FirebaseMessaging.instance.getToken();
 
                   if (token != null) {
+                    // 🔥 먼저 저장
+                    await controller.evaluateJavascript(
+                      source: "window.LAST_FCM_TOKEN = '$token';",
+                    );
+
+                    // 🔥 딜레이 추가 (핵심)
+                    await Future.delayed(const Duration(milliseconds: 300));
+
                     await controller.evaluateJavascript(
                       source:
                           "window.onFlutterFCMToken && window.onFlutterFCMToken('$token');",
@@ -518,6 +537,8 @@ fetch('/result/member_login_ok.php', {
                   }
 
                   await _checkNotificationPermission();
+                  final count = await fetchUnreadCount();
+                  updateBadge(count);
                 },
                 androidOnPermissionRequest:
                     (controller, origin, resources) async {
