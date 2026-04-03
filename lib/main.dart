@@ -63,7 +63,7 @@ Future<void> main() async {
   );
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-    alert: true,
+    alert: false,
     badge: false,
     sound: true,
   );
