@@ -23,7 +23,7 @@ Future<bool> shouldShowUpdatePopup() async {
 
   // 서버 최신 버전
   final res = await http.get(
-    Uri.parse('http://ec521.tplinkdns.com:8080/app/version.json'),
+    Uri.parse('https://urbanfootball.co.kr/app/version.json'),
   );
   if (res.statusCode != 200) return false;
 

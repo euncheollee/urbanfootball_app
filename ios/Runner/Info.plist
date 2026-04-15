@@ -79,5 +79,12 @@
 		<string>사진 촬영을 위해 필요합니다.</string>
 		<key>FirebaseAppDelegateProxyEnabled</key>
 		<true/>		
+
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>이미지를 사진 보관함에 저장하기 위해 권한이 필요합니다.</string>
+
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>이미지를 사진 보관함에 저장하기 위해 권한이 필요합니다.</string>
+
 	</dict>
 </plist>

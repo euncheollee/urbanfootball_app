@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -10,6 +11,11 @@ import 'update_checker.dart';
 import 'update_dialog.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_app_badger/flutter_app_badger.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -33,8 +39,19 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       .replaceAll(r'\"', '"')
       .replaceAll("\\n", "\n");
 
+  final count = int.tryParse(message.data['unread_count'] ?? '0') ?? 0;
+
+  if (count == 0) {
+    return;
+  }
+
+  // 🔥 추가
+  if (await FlutterAppBadger.isAppBadgeSupported()) {
+    await FlutterAppBadger.updateBadgeCount(count);
+  }
+
   await flutterLocalNotificationsPlugin.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    0,
     title,
     body,
     NotificationDetails(
@@ -106,7 +123,7 @@ class _NotificationRouter {
   static InAppWebViewController? _controller;
   static String? _queuedUrl;
 
-  static const String _baseUrl = 'http://ec521.tplinkdns.com:8080';
+  static const String _baseUrl = 'https://urbanfootball.co.kr';
 
   static String _normalize(String url) {
     if (url.startsWith('http')) return url;
@@ -144,6 +161,16 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
+
+      // 🔥 추가
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+
+      supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+
       home: WebViewPage(),
     );
   }
@@ -167,18 +194,32 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
 
   String _currentUrl = ""; // 🔥 여기 추가
 
-  static const String _baseUrl = 'http://ec521.tplinkdns.com:8080';
+  static const MethodChannel _galleryChannel = MethodChannel(
+    'urbanfootball/gallery',
+  );
+  static const String _baseUrl = 'https://urbanfootball.co.kr';
   static const String _homeUrl =
-      'http://ec521.tplinkdns.com:8080/m/main/index.html';
+      'https://urbanfootball.co.kr/m/main/index.html';
   static const String _loginUrl =
-      'http://ec521.tplinkdns.com:8080/m/member/member_login.html';
+      'https://urbanfootball.co.kr/m/member/member_login.html';
   String _startUrl = _loginUrl;
 
   @override
   void initState() {
     super.initState();
-    fetchUnreadCount().then(updateBadge); // 🔥 추가
+
     _checkLoginStatus();
+
+    // 🔥 1. 즉시 1회 (핵심)
+    _waitAndSyncBadge();
+
+    // 🔥 2. 보정 1회
+    Future.delayed(const Duration(milliseconds: 300), () async {
+      await _waitAndSyncBadge();
+    });
+
+    // 🔥 3. 지속 복구
+    _startBadgeRecoveryLoop();
 
     _checkUpdatePopup();
     WidgetsBinding.instance.addObserver(this);
@@ -192,21 +233,109 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
     });
   }
 
+  void _startBadgeRecoveryLoop() {
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 3));
+
+      final rawUserId = await _webViewController?.evaluateJavascript(
+        source: "window.LOGIN_USER_ID",
+      );
+
+      final userId = rawUserId?.toString().replaceAll('"', '') ?? '';
+
+      if (userId.isNotEmpty && userId != 'null' && userId != 'undefined') {
+        final count = await fetchUnreadCount();
+        updateBadge(count);
+      }
+
+      return true; // 계속 반복
+    });
+  }
+
+  Future<String> _saveImageToGallery(String dataUrl) async {
+    try {
+      if (dataUrl.isEmpty || !dataUrl.contains(',')) {
+        return "invalid_data";
+      }
+
+      // data:image/jpeg;base64,xxxxx
+      final base64String = dataUrl.split(',').last;
+
+      if (Platform.isIOS) {
+        final status = await Permission.photosAddOnly.request();
+        if (!status.isGranted) {
+          return "permission_denied";
+        }
+      }
+
+      if (Platform.isAndroid) {
+        // Android 13+는 READ_MEDIA_IMAGES, 그 미만은 보통 추가 권한 없이도 MediaStore 저장 가능
+        // 다만 기기별 이슈 대비해서 요청
+        final photos = await Permission.photos.request();
+        final storage = await Permission.storage.request();
+
+        if (!photos.isGranted && !storage.isGranted) {
+          // 둘 다 거부면 실패 처리
+          // 일부 기기는 storage가 항상 denied일 수 있으니 photos 허용이면 통과
+        }
+      }
+
+      final result = await _galleryChannel.invokeMethod('saveImageToGallery', {
+        'base64': base64String,
+        'fileName': 'card_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      });
+
+      return (result ?? "fail").toString();
+    } catch (e) {
+      return "error: $e";
+    }
+  }
+
   Future<int> fetchUnreadCount() async {
     final rawUserId = await _webViewController?.evaluateJavascript(
       source: "window.LOGIN_USER_ID",
     );
 
-    // 🔥 따옴표 제거
     final userId = rawUserId?.toString().replaceAll('"', '') ?? '';
 
-    if (userId.isEmpty) return 0;
+    // 🔥 로그아웃 상태
+    if (userId.isEmpty || userId == 'null' || userId == 'undefined') {
+      return 0;
+    }
+
+    print("현재 userId: $userId");
 
     final res = await http.get(
       Uri.parse("$_baseUrl/api/unread_count.php?user_id=$userId"),
     );
 
-    return int.tryParse(res.body) ?? 0;
+    final count = int.tryParse(res.body) ?? 0;
+
+    if (count > 0) {
+      await FlutterAppBadger.updateBadgeCount(count);
+    } else {
+      await FlutterAppBadger.removeBadge();
+    }
+
+    return count;
+  }
+
+  Future<void> _waitAndSyncBadge() async {
+    for (int i = 0; i < 10; i++) {
+      final rawUserId = await _webViewController?.evaluateJavascript(
+        source: "window.LOGIN_USER_ID",
+      );
+
+      final userId = rawUserId?.toString().replaceAll('"', '') ?? '';
+
+      if (userId.isNotEmpty && userId != 'null' && userId != 'undefined') {
+        final count = await fetchUnreadCount();
+        updateBadge(count);
+        return;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
   }
 
   void updateBadge(int count) async {
@@ -353,7 +482,15 @@ fetch('/result/member_login_ok.php', {
 .then(res => res.text())
 .then(data => {
   if (data.includes("ok|!|")) {
-    window.location.href='/m/main/index.html';
+
+    if (window.flutter_inappwebview) {
+      window.flutter_inappwebview.callHandler('AppChannel', 'badge_sync');
+    }
+
+    setTimeout(function(){
+      window.location.href='/m/main/index.html';
+    }, 150);
+
   } else if (data.includes("new|!|")) {
     window.location.href='/m/member/member_join.html';
   } else {
@@ -386,19 +523,65 @@ fetch('/result/member_login_ok.php', {
           _NotificationRouter.handle(url);
         });
       }
-
+      // 🔥 핵심 추가
+      await Future.delayed(const Duration(milliseconds: 300));
       final count = await fetchUnreadCount();
       updateBadge(count);
     });
 
     // 🔥 앱 종료 상태 → 클릭
-    FirebaseMessaging.instance.getInitialMessage().then((message) {
+    FirebaseMessaging.instance.getInitialMessage().then((message) async {
       if (message != null) {
         final url = message.data['url'];
 
         if (url != null && url.isNotEmpty) {
           _NotificationRouter.handle(url);
         }
+
+        // 🔥 추가
+        await Future.delayed(const Duration(milliseconds: 300));
+
+        final count = await fetchUnreadCount();
+        updateBadge(count);
+      }
+    });
+
+    // 🔥 포그라운드 수신
+    FirebaseMessaging.onMessage.listen((message) async {
+      if (Platform.isAndroid) {
+        final rawTitle = message.data['title'] ?? "";
+        final rawBody = message.data['body'] ?? "";
+
+        final title = rawTitle.replaceAll(r'\\\"', '"').replaceAll(r'\"', '"');
+
+        final body = rawBody
+            .replaceAll(r'\\\"', '"')
+            .replaceAll(r'\"', '"')
+            .replaceAll("\\n", "\n");
+        final count = await fetchUnreadCount();
+
+        if (count == 0) {
+          return; // 🔥 여기서 끝
+        }
+
+        flutterLocalNotificationsPlugin.show(
+          DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          title,
+          body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              androidChannel.id,
+              androidChannel.name,
+              channelDescription: androidChannel.description,
+              importance: Importance.high,
+              priority: Priority.high,
+              styleInformation: BigTextStyleInformation(body),
+            ),
+          ),
+          payload: message.data['url']?.toString() ?? '',
+        );
+
+        updateBadge(count);
       }
     });
   }
@@ -466,6 +649,537 @@ fetch('/result/member_login_ok.php', {
                   _NotificationRouter.attach(controller);
 
                   controller.addJavaScriptHandler(
+                    handlerName: 'openDatePicker',
+                    callback: (args) async {
+                      final inputId = args[0].toString();
+                      final type = args.length > 1
+                          ? args[1].toString()
+                          : "date";
+
+                      // 🔥 현재 input 값 가져오기
+                      String? currentValue = await _webViewController
+                          ?.evaluateJavascript(
+                            source:
+                                "document.getElementById('$inputId').value;",
+                          );
+
+                      currentValue = currentValue?.replaceAll('"', '');
+
+                      DateTime now = DateTime.now();
+
+                      DateTime initialDate = now;
+
+                      // 🔥 기존 값 있으면 그걸 초기값으로
+                      if (currentValue != null && currentValue.isNotEmpty) {
+                        try {
+                          if (type == "date") {
+                            initialDate = DateTime.parse(currentValue);
+                          } else if (type == "month") {
+                            initialDate = DateTime.parse(currentValue + "-01");
+                          }
+                        } catch (e) {}
+                      }
+
+                      // =========================
+                      // 🔥 DATE
+                      // =========================
+                      if (type == "date") {
+                        DateTime now = DateTime.now();
+
+                        // 🔥 초기값: 기존 값 있으면 유지, 없으면 오늘
+                        DateTime selectedDate = initialDate ?? now;
+
+                        // 🔥 화면에 보여줄 월/년 (선택과 분리)
+                        int viewYear = selectedDate.year;
+                        int viewMonth = selectedDate.month;
+
+                        await showDialog(
+                          context: context,
+                          builder: (context) {
+                            return Dialog(
+                              backgroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: StatefulBuilder(
+                                builder: (context, setState) {
+                                  // 🔥 현재 월의 시작/끝 계산
+                                  DateTime firstDay = DateTime(
+                                    viewYear,
+                                    viewMonth,
+                                    1,
+                                  );
+                                  int lastDay = DateTime(
+                                    viewYear,
+                                    viewMonth + 1,
+                                    0,
+                                  ).day;
+                                  int startWeekday =
+                                      firstDay.weekday % 7; // 일요일 시작
+
+                                  List<Widget> dayWidgets = [];
+
+                                  // 🔥 앞쪽 빈칸
+                                  for (int i = 0; i < startWeekday; i++) {
+                                    dayWidgets.add(const SizedBox());
+                                  }
+
+                                  // 🔥 날짜 셀 생성
+                                  for (int i = 1; i <= lastDay; i++) {
+                                    bool isToday =
+                                        (viewYear == now.year &&
+                                        viewMonth == now.month &&
+                                        i == now.day);
+
+                                    bool isSelected =
+                                        (selectedDate.year == viewYear &&
+                                        selectedDate.month == viewMonth &&
+                                        selectedDate.day == i);
+
+                                    dayWidgets.add(
+                                      GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            // 🔥 선택은 여기서만 변경
+                                            selectedDate = DateTime(
+                                              viewYear,
+                                              viewMonth,
+                                              i,
+                                            );
+                                          });
+                                        },
+                                        child: Container(
+                                          alignment: Alignment.center,
+                                          margin: const EdgeInsets.all(2),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? const Color(0xFF4f6494)
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              50,
+                                            ),
+
+                                            // 🔥 오늘 테두리
+                                            border: isToday
+                                                ? Border.all(
+                                                    color: const Color(
+                                                      0xFF4f6494,
+                                                    ),
+                                                    width: 1.5,
+                                                  )
+                                                : null,
+                                          ),
+                                          child: Text(
+                                            "$i",
+                                            style: TextStyle(
+                                              // 🔥 선택 시 흰색 (오늘 포함)
+                                              color: isSelected
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  return Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      20,
+                                      18,
+                                      20,
+                                      10,
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // =========================
+                                        // 🔥 상단 (월 이동)
+                                        // =========================
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.chevron_left,
+                                              ),
+                                              onPressed: () {
+                                                setState(() {
+                                                  viewMonth--;
+                                                  if (viewMonth < 1) {
+                                                    viewMonth = 12;
+                                                    viewYear--;
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                            Text(
+                                              "$viewYear년 $viewMonth월",
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.chevron_right,
+                                              ),
+                                              onPressed: () {
+                                                setState(() {
+                                                  viewMonth++;
+                                                  if (viewMonth > 12) {
+                                                    viewMonth = 1;
+                                                    viewYear++;
+                                                  }
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+
+                                        const SizedBox(height: 10),
+
+                                        // =========================
+                                        // 🔥 요일
+                                        // =========================
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children:
+                                              [
+                                                    "일",
+                                                    "월",
+                                                    "화",
+                                                    "수",
+                                                    "목",
+                                                    "금",
+                                                    "토",
+                                                  ]
+                                                  .map(
+                                                    (e) => Expanded(
+                                                      child: Center(
+                                                        child: Text(
+                                                          e,
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 12,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                        ),
+
+                                        const SizedBox(height: 5),
+
+                                        // =========================
+                                        // 🔥 날짜 그리드
+                                        // =========================
+                                        GridView.count(
+                                          shrinkWrap: true,
+                                          crossAxisCount: 7,
+                                          childAspectRatio: 1.3,
+                                          children: dayWidgets,
+                                        ),
+
+                                        const SizedBox(height: 15),
+
+                                        // =========================
+                                        // 🔥 버튼
+                                        // =========================
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            // 🔥 삭제 버튼 (왼쪽)
+                                            TextButton(
+                                              onPressed: () async {
+                                                DateTime now = DateTime.now();
+
+                                                String result =
+                                                    "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+                                                // 🔥 즉시 웹에 반영 + 페이지 이동
+                                                await _webViewController
+                                                    ?.evaluateJavascript(
+                                                      source:
+                                                          """
+            (function(){
+              var el = document.getElementById('$inputId');
+              if(el){
+                el.value = '$result';
+                el.dispatchEvent(new Event('change'));
+              }
+            })();
+          """,
+                                                    );
+
+                                                Navigator.pop(
+                                                  context,
+                                                ); // 🔥 바로 닫기
+                                              },
+                                              child: const Text(
+                                                "삭제",
+                                                style: TextStyle(
+                                                  color: Color(
+                                                    0xFF4f6494,
+                                                  ), // 👉 원하는 색으로 조정 가능
+                                                ),
+                                              ),
+                                            ),
+
+                                            // 🔥 오른쪽 (취소 / 확인 유지)
+                                            Row(
+                                              children: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(context),
+                                                  child: const Text(
+                                                    "취소",
+                                                    style: TextStyle(
+                                                      color: Colors.black54,
+                                                    ),
+                                                  ),
+                                                ),
+                                                TextButton(
+                                                  onPressed: () async {
+                                                    String result =
+                                                        "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
+
+                                                    await _webViewController
+                                                        ?.evaluateJavascript(
+                                                          source:
+                                                              """
+                (function(){
+                  var el = document.getElementById('$inputId');
+                  if(el){
+                    el.value = '$result';
+                    el.dispatchEvent(new Event('change'));
+                  }
+                })();
+              """,
+                                                        );
+
+                                                    Navigator.pop(context);
+                                                  },
+                                                  child: const Text(
+                                                    "확인",
+                                                    style: TextStyle(
+                                                      color: Color(0xFF4f6494),
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        );
+                      }
+
+                      // =========================
+                      // 🔥 MONTH
+                      // =========================
+                      if (type == "month") {
+                        int selectedYear = initialDate.year;
+                        int selectedMonth = initialDate.month;
+
+                        await showDialog(
+                          context: context,
+                          builder: (context) {
+                            return Dialog(
+                              backgroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: StatefulBuilder(
+                                builder: (context, setState) {
+                                  return Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      20,
+                                      18,
+                                      20,
+                                      10,
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.chevron_left,
+                                              ),
+                                              onPressed: () {
+                                                setState(() => selectedYear--);
+                                              },
+                                            ),
+                                            Text(
+                                              "$selectedYear년",
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.chevron_right,
+                                              ),
+                                              onPressed: () {
+                                                setState(() => selectedYear++);
+                                              },
+                                            ),
+                                          ],
+                                        ),
+
+                                        const SizedBox(height: 10),
+
+                                        GridView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          itemCount: 12,
+                                          gridDelegate:
+                                              const SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount: 4,
+                                                childAspectRatio: 2.2,
+                                                crossAxisSpacing: 5,
+                                                mainAxisSpacing: 5,
+                                              ),
+                                          itemBuilder: (context, index) {
+                                            int month = index + 1;
+                                            bool isSelected =
+                                                month == selectedMonth;
+
+                                            return GestureDetector(
+                                              onTap: () {
+                                                setState(
+                                                  () => selectedMonth = month,
+                                                );
+                                              },
+                                              child: Container(
+                                                alignment: Alignment.center,
+                                                decoration: BoxDecoration(
+                                                  color: isSelected
+                                                      ? Color(0xFF4f6494)
+                                                      : Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  "$month월",
+                                                  style: TextStyle(
+                                                    color: isSelected
+                                                        ? Colors.white
+                                                        : Colors.black,
+                                                    fontWeight: isSelected
+                                                        ? FontWeight.bold
+                                                        : FontWeight.normal,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+
+                                        const SizedBox(height: 15),
+
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context),
+                                              child: const Text(
+                                                "취소",
+                                                style: TextStyle(
+                                                  color: Colors.black54,
+                                                ),
+                                              ),
+                                            ),
+                                            TextButton(
+                                              onPressed: () async {
+                                                String result =
+                                                    "$selectedYear-${selectedMonth.toString().padLeft(2, '0')}";
+
+                                                await _webViewController
+                                                    ?.evaluateJavascript(
+                                                      source:
+                                                          """
+                                  (function(){
+                                    var el = document.getElementById('$inputId');
+                                    if(el){
+                                      el.value = '$result';
+                                      el.dispatchEvent(new Event('change'));
+                                    }
+                                  })();
+                                """,
+                                                    );
+
+                                                Navigator.pop(context);
+                                              },
+                                              child: const Text(
+                                                "확인",
+                                                style: TextStyle(
+                                                  color: Color(0xFF4f6494),
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        );
+                      }
+
+                      return null;
+                    },
+                  );
+
+                  controller.addJavaScriptHandler(
+                    handlerName: 'downloadImage',
+                    callback: (args) async {
+                      if (args.isEmpty) {
+                        return "invalid_data";
+                      }
+
+                      final dataUrl = args.first.toString();
+                      final result = await _saveImageToGallery(dataUrl);
+
+                      // 웹 쪽으로 저장 결과 전달
+                      await _webViewController?.evaluateJavascript(
+                        source:
+                            """
+        window.onFlutterImageSaveResult && window.onFlutterImageSaveResult(${jsonEncode(result)});
+      """,
+                      );
+
+                      return result;
+                    },
+                  );
+                  controller.addJavaScriptHandler(
                     handlerName: 'KakaoBridge',
                     callback: (args) async {
                       if (args.isNotEmpty && args.first == 'login') {
@@ -488,8 +1202,36 @@ fetch('/result/member_login_ok.php', {
 
                       // 3. WebView 저장소 삭제
                       await _webViewController?.evaluateJavascript(
-                        source: "localStorage.clear(); sessionStorage.clear();",
+                        source: """
+                          (function() {
+                              var keep = {};
+
+                              // 🔥 popup 관련만 백업
+                              for (var i = 0; i < localStorage.length; i++) {
+                                  var key = localStorage.key(i);
+                                  if (key.startsWith('uf_popup_hide_')) {
+                                      keep[key] = localStorage.getItem(key);
+                                  }
+                              }
+
+                              // 전체 삭제
+                              localStorage.clear();
+
+                              // 🔥 popup 다시 복원
+                              for (var k in keep) {
+                                  localStorage.setItem(k, keep[k]);
+                              }
+
+                              sessionStorage.clear();
+                              window.LOGIN_USER_ID = '';
+                          })();
+                        """,
                       );
+
+                      // 🔥 핵심 추가
+                      await FlutterAppBadger.removeBadge();
+                      await flutterLocalNotificationsPlugin
+                          .cancelAll(); // 🔥 반드시 추가
 
                       return null;
                     },
@@ -515,6 +1257,28 @@ fetch('/result/member_login_ok.php', {
                 },
                 shouldOverrideUrlLoading: (controller, navigationAction) async {
                   final url = navigationAction.request.url?.toString() ?? '';
+
+                  // 🔥 1. 전화
+                  if (url.startsWith("tel:")) {
+                    await launchUrl(Uri.parse(url));
+                    return NavigationActionPolicy.CANCEL;
+                  }
+
+                  // 🔥 2. 카카오 상담 (pf.kakao.com)
+                  if (url.contains("pf.kakao.com")) {
+                    await launchUrl(
+                      Uri.parse(url),
+                      mode: LaunchMode.externalApplication, // 🔥 핵심
+                    );
+                    return NavigationActionPolicy.CANCEL;
+                  }
+
+                  // 🔥 3. intent / kakaoplus (예외 대비)
+                  if (!url.startsWith("http")) {
+                    await launchUrl(Uri.parse(url));
+                    return NavigationActionPolicy.CANCEL;
+                  }
+
                   setState(() {
                     _showBackButton = !url.startsWith(_baseUrl);
                   });
@@ -523,21 +1287,6 @@ fetch('/result/member_login_ok.php', {
                 onLoadStop: (controller, url) async {
                   _currentUrl = url?.toString() ?? "";
                   _NotificationRouter.attach(controller);
-
-                  controller.addJavaScriptHandler(
-                    handlerName: 'AppChannel',
-                    callback: (args) async {
-                      print("🔥 badge_sync 호출됨: $args");
-
-                      if (args.isNotEmpty && args.first == 'badge_sync') {
-                        final count = await fetchUnreadCount();
-                        print("🔥 count: $count");
-                        updateBadge(count);
-                      }
-
-                      return null;
-                    },
-                  );
 
                   final token = await FirebaseMessaging.instance.getToken();
 
@@ -562,8 +1311,10 @@ fetch('/result/member_login_ok.php', {
                   }
 
                   await _checkNotificationPermission();
-                  final count = await fetchUnreadCount();
-                  updateBadge(count);
+                  await Future.delayed(
+                    const Duration(milliseconds: 300),
+                  ); // 🔥 추가
+                  await _waitAndSyncBadge();
                 },
                 androidOnPermissionRequest:
                     (controller, origin, resources) async {

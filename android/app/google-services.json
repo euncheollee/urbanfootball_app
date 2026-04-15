@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:929011511050:android:98080b97e80fc6813f54f3",
+        "mobilesdk_app_id": "1:929011511050:android:70e3407a64b1d3ef3f54f3",
         "android_client_info": {
-          "package_name": "com.example.urbanfootball_app"
+          "package_name": "com.urbanfootball.android"
         }
       },
       "oauth_client": [],

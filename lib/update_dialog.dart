@@ -103,8 +103,9 @@ class UpdateDialog extends StatelessWidget {
   }
 
   void _goToStore() async {
-    const androidUrl = 'https://play.google.com/store/apps/details?id=패키지명';
-    const iosUrl = 'https://apps.apple.com/app/id앱아이디';
+    const androidUrl =
+        'https://play.google.com/store/apps/details?id=com.urbanfootball.android';
+    const iosUrl = 'https://apps.apple.com/app/com.urbanfootball.app';
 
     final uri = Uri.parse(Platform.isIOS ? iosUrl : androidUrl);
 
