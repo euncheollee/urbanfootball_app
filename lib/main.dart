@@ -642,7 +642,9 @@ fetch('/result/member_login_ok.php', {
                   useHybridComposition: true,
                   allowFileAccess: true,
                   allowContentAccess: true,
-                  userAgent: 'Mozilla/5.0 (UrbanFootballApp WebView)',
+                  userAgent: Platform.isAndroid
+                      ? 'Mozilla/5.0 (UrbanFootballApp WebView) Android'
+                      : 'Mozilla/5.0 (UrbanFootballApp WebView) iOS',
                 ),
                 onWebViewCreated: (controller) async {
                   _webViewController = controller;
