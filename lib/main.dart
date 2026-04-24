@@ -16,7 +16,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:app_links/app_links.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -208,23 +207,26 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
       'https://urbanfootball.co.kr/m/member/member_login.html';
   String _startUrl = _loginUrl;
 
-  late AppLinks _appLinks;
   String? _pendingDeepLink;
+  String _debugUri = "";
+  static const MethodChannel _deepLinkChannel = MethodChannel(
+    'deeplink_channel',
+  );
 
   @override
   void initState() {
     super.initState();
-    _appLinks = AppLinks();
 
-    _appLinks.getInitialAppLink().then((uri) {
-      if (uri != null) {
-        _pendingDeepLink = uri.toString(); // 🔥 저장만
-      }
-    });
+    // 🔥 기존 uni_links 코드 그대로 두고 아래 추가
+    _deepLinkChannel.setMethodCallHandler((call) async {
+      if (call.method == "onDeepLink") {
+        final link = call.arguments as String;
 
-    _appLinks.uriLinkStream.listen((uri) {
-      if (uri != null) {
-        _pendingDeepLink = uri.toString(); // 🔥 저장만
+        print("🔥 Native 딥링크: $link");
+
+        final uri = Uri.parse(link);
+
+        _handleDeepLink(uri);
       }
     });
 
@@ -254,6 +256,10 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   }
 
   void _handleDeepLink(Uri uri) {
+    setState(() {
+      _debugUri = uri.toString();
+    });
+
     String path = "";
 
     if (uri.queryParameters.containsKey('url')) {
@@ -278,12 +284,16 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
       }
     }
 
-    // 🔥 확인용
+    if (path.isEmpty) return;
+
+    // 🔥🔥 여기 추가 (핵심)
     _webViewController?.evaluateJavascript(
       source: "alert('URI: ${uri.toString()}\\nPATH: $path');",
     );
 
-    _NotificationRouter.handle(path);
+    Future.delayed(const Duration(milliseconds: 200), () {
+      _NotificationRouter.handle(path);
+    });
   }
 
   void _startBadgeRecoveryLoop() {
@@ -1603,6 +1613,21 @@ fetch('/result/member_login_ok.php', {
                       valueColor: AlwaysStoppedAnimation<Color>(
                         Color(0xFF00CD00),
                       ),
+                    ),
+                  ),
+                ),
+              // 🔥 여기 추가
+              if (_debugUri.isNotEmpty)
+                Positioned(
+                  top: 50,
+                  left: 10,
+                  right: 10,
+                  child: Container(
+                    color: Colors.black.withOpacity(0.7),
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      _debugUri,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
                 ),
