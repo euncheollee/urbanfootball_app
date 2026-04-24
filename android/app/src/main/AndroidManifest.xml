@@ -35,6 +35,7 @@
                 <category android:name="android.intent.category.DEFAULT"/>                
             </intent-filter>
 
+            <!-- ✅ 1. 웹 링크 (App Link) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -42,8 +43,16 @@
 
                 <data android:scheme="http" android:host="urbanfootball.co.kr" />
                 <data android:scheme="https" android:host="urbanfootball.co.kr" />
-                
                 <data android:scheme="https" android:host="www.urbanfootball.co.kr" />
+            </intent-filter>
+
+            <!-- ✅ 2. 앱 스킴 (딥링크) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="urbanfootball" />
             </intent-filter>
 
         </activity>

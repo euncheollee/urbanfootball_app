@@ -24,7 +24,7 @@ dependencies:
   flutter_local_notifications: ^17.2.1
   
   # 🔥 추가
-
+  app_links: ^3.4.5
   path_provider: ^2.0.15
   permission_handler: ^11.0.1
 

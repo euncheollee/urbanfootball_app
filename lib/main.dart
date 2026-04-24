@@ -16,6 +16,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:app_links/app_links.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -204,9 +205,25 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
       'https://urbanfootball.co.kr/m/member/member_login.html';
   String _startUrl = _loginUrl;
 
+  late AppLinks _appLinks;
+
   @override
   void initState() {
     super.initState();
+    _appLinks = AppLinks();
+
+    // 앱 종료 상태
+    _appLinks.getInitialAppLink().then((uri) {
+      if (uri != null) {
+        _handleDeepLink(uri); // ✅ 그대로 Uri 넘김
+      }
+    });
+
+    _appLinks.uriLinkStream.listen((uri) {
+      if (uri != null) {
+        _handleDeepLink(uri); // ✅ 그대로 Uri 넘김
+      }
+    });
 
     _checkLoginStatus();
 
@@ -231,6 +248,23 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
             "window.onFlutterFCMToken && window.onFlutterFCMToken('$newToken');",
       );
     });
+  }
+
+  void _handleDeepLink(Uri uri) {
+    String path = "";
+
+    // 🔥 host + path 같이 사용
+    if (uri.host.isNotEmpty) {
+      path = "/${uri.host}${uri.path}";
+    } else {
+      path = uri.path;
+    }
+
+    if (uri.query.isNotEmpty) {
+      path += '?${uri.query}';
+    }
+
+    _NotificationRouter.handle(path);
   }
 
   void _startBadgeRecoveryLoop() {
