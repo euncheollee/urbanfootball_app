@@ -209,22 +209,22 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   String _startUrl = _loginUrl;
 
   late AppLinks _appLinks;
+  String? _pendingDeepLink;
 
   @override
   void initState() {
     super.initState();
     _appLinks = AppLinks();
 
-    // 앱 종료 상태
     _appLinks.getInitialAppLink().then((uri) {
       if (uri != null) {
-        _handleDeepLink(uri); // ✅ 그대로 Uri 넘김
+        _pendingDeepLink = uri.toString(); // 🔥 저장만
       }
     });
 
     _appLinks.uriLinkStream.listen((uri) {
       if (uri != null) {
-        _handleDeepLink(uri); // ✅ 그대로 Uri 넘김
+        _pendingDeepLink = uri.toString(); // 🔥 저장만
       }
     });
 
@@ -259,11 +259,7 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
     if (uri.scheme.startsWith('http')) {
       path = uri.path;
     } else {
-      if (uri.host.isNotEmpty) {
-        path = "/${uri.host}${uri.path}";
-      } else {
-        path = uri.path;
-      }
+      path = uri.host.isNotEmpty ? "/${uri.host}${uri.path}" : uri.path;
     }
 
     if (uri.queryParameters.isNotEmpty) {
@@ -271,22 +267,10 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
       path += '?$query';
     }
 
-    print("딥링크 path: $path");
+    // 🔥 이미 같은 페이지면 무시
+    if (_currentUrl.contains(path)) return;
 
-    int retry = 0;
-
-    void tryLoad() {
-      if (_NotificationRouter._controller != null) {
-        _NotificationRouter.handle(path);
-      } else {
-        retry++;
-        if (retry < 5) {
-          Future.delayed(const Duration(milliseconds: 300), tryLoad);
-        }
-      }
-    }
-
-    tryLoad();
+    _NotificationRouter.handle(path);
   }
 
   void _startBadgeRecoveryLoop() {
@@ -1366,6 +1350,16 @@ fetch('/result/member_login_ok.php', {
                   if (_pendingUrl != null) {
                     _NotificationRouter.handle(_pendingUrl);
                     _pendingUrl = null;
+                  }
+
+                  if (_pendingDeepLink != null) {
+                    final uri = Uri.parse(_pendingDeepLink!);
+
+                    _pendingDeepLink = null; // 🔥 먼저 지워야 함 (핵심)
+
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      _handleDeepLink(uri);
+                    });
                   }
 
                   await _checkNotificationPermission();
