@@ -55,7 +55,7 @@ func application(
   if let url = launchOptions?[.url] as? URL {
     let link = url.absoluteString
 
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+    DispatchQueue.main.async {
       if let vc = self.window?.rootViewController as? FlutterViewController {
         let channel = FlutterMethodChannel(
           name: "deeplink_channel",

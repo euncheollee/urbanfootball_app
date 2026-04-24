@@ -221,12 +221,7 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
     _deepLinkChannel.setMethodCallHandler((call) async {
       if (call.method == "onDeepLink") {
         final link = call.arguments as String;
-
-        print("🔥 Native 딥링크: $link");
-
-        final uri = Uri.parse(link);
-
-        _handleDeepLink(uri);
+        _pendingDeepLink = link; // 🔥 저장만
       }
     });
 
@@ -1347,6 +1342,13 @@ fetch('/result/member_login_ok.php', {
                 onLoadStop: (controller, url) async {
                   _currentUrl = url?.toString() ?? "";
                   _NotificationRouter.attach(controller);
+
+                  if (_pendingDeepLink != null) {
+                    final uri = Uri.parse(_pendingDeepLink!);
+                    _pendingDeepLink = null;
+
+                    _handleDeepLink(uri);
+                  }
 
                   final token = await FirebaseMessaging.instance.getToken();
 
