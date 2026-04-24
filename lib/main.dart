@@ -251,9 +251,8 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   }
 
   void _handleDeepLink(Uri uri) {
-    String path = "";
+    String path;
 
-    // 🔥 host + path 같이 사용
     if (uri.host.isNotEmpty) {
       path = "/${uri.host}${uri.path}";
     } else {
@@ -264,7 +263,10 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
       path += '?${uri.query}';
     }
 
-    _NotificationRouter.handle(path);
+    // 🔥 약간의 딜레이로 안정화 (iOS 핵심)
+    Future.delayed(const Duration(milliseconds: 200), () {
+      _NotificationRouter.handle(path);
+    });
   }
 
   void _startBadgeRecoveryLoop() {
