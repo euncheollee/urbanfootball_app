@@ -136,7 +136,10 @@ class _NotificationRouter {
     _controller = controller;
 
     if (_queuedUrl != null) {
+      print("큐된 URL 실행: $_queuedUrl");
+
       _controller!.loadUrl(urlRequest: URLRequest(url: WebUri(_queuedUrl!)));
+
       _queuedUrl = null;
     }
   }
@@ -253,32 +256,37 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   void _handleDeepLink(Uri uri) {
     String path;
 
-    // 🔥 Universal Link (https)
     if (uri.scheme.startsWith('http')) {
       path = uri.path;
-
-      if (uri.query.isNotEmpty) {
-        path += '?${uri.query}';
-      }
-    }
-    // 🔥 커스텀 스킴 (urbanfootball://)
-    else {
+    } else {
       if (uri.host.isNotEmpty) {
         path = "/${uri.host}${uri.path}";
       } else {
         path = uri.path;
       }
+    }
 
-      if (uri.query.isNotEmpty) {
-        path += '?${uri.query}';
+    if (uri.queryParameters.isNotEmpty) {
+      final query = Uri(queryParameters: uri.queryParameters).query;
+      path += '?$query';
+    }
+
+    print("딥링크 path: $path");
+
+    int retry = 0;
+
+    void tryLoad() {
+      if (_NotificationRouter._controller != null) {
+        _NotificationRouter.handle(path);
+      } else {
+        retry++;
+        if (retry < 5) {
+          Future.delayed(const Duration(milliseconds: 300), tryLoad);
+        }
       }
     }
 
-    print("최종 path: $path");
-
-    Future.delayed(const Duration(milliseconds: 200), () {
-      _NotificationRouter.handle(path);
-    });
+    tryLoad();
   }
 
   void _startBadgeRecoveryLoop() {
