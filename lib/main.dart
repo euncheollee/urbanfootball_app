@@ -253,11 +253,14 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   void _handleDeepLink(Uri uri) {
     String path = "";
 
-    // 🔥 iOS 대응 (query 방식)
-    if (uri.queryParameters['url'] != null) {
+    // 🔥 fragment 방식 대응
+    if (uri.fragment.isNotEmpty) {
+      path = Uri.decodeComponent(uri.fragment);
+    }
+    // 기존 query 방식도 같이 지원
+    else if (uri.queryParameters['url'] != null) {
       path = uri.queryParameters['url']!;
     } else {
-      // 기존 방식 (Android)
       if (uri.host.isNotEmpty) {
         path = "/${uri.host}${uri.path}";
       } else {
