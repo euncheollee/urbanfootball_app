@@ -253,15 +253,28 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   void _handleDeepLink(Uri uri) {
     String path;
 
-    if (uri.host.isNotEmpty) {
-      path = "/${uri.host}${uri.path}";
-    } else {
+    // 🔥 Universal Link (https)
+    if (uri.scheme.startsWith('http')) {
       path = uri.path;
+
+      if (uri.query.isNotEmpty) {
+        path += '?${uri.query}';
+      }
+    }
+    // 🔥 커스텀 스킴 (urbanfootball://)
+    else {
+      if (uri.host.isNotEmpty) {
+        path = "/${uri.host}${uri.path}";
+      } else {
+        path = uri.path;
+      }
+
+      if (uri.query.isNotEmpty) {
+        path += '?${uri.query}';
+      }
     }
 
-    if (uri.query.isNotEmpty) {
-      path += '?${uri.query}';
-    }
+    print("최종 path: $path");
 
     Future.delayed(const Duration(milliseconds: 200), () {
       _NotificationRouter.handle(path);
