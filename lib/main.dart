@@ -256,21 +256,16 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   void _handleDeepLink(Uri uri) {
     String path = "";
 
-    // 🔥 1. iOS query 방식 (urbanfootball://open?url=...)
     if (uri.queryParameters.containsKey('url')) {
       path = uri.queryParameters['url']!;
-    }
-    // 🔥 2. https (혹시 사용될 경우)
-    else if (uri.scheme.startsWith('http')) {
+    } else if (uri.scheme.startsWith('http')) {
       path = uri.path;
 
       if (uri.queryParameters.isNotEmpty) {
         final query = Uri(queryParameters: uri.queryParameters).query;
         path += '?$query';
       }
-    }
-    // 🔥 3. 기존 scheme 방식 (urbanfootball://m/...)
-    else {
+    } else {
       if (uri.host.isNotEmpty) {
         path = "/${uri.host}${uri.path}";
       } else {
@@ -283,8 +278,10 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
       }
     }
 
-    // 🔥 안전 처리 (빈 값 방지)
-    if (path.isEmpty) return;
+    // 🔥 확인용
+    _webViewController?.evaluateJavascript(
+      source: "alert('URI: ${uri.toString()}\\nPATH: $path');",
+    );
 
     _NotificationRouter.handle(path);
   }
