@@ -286,11 +286,6 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
 
     if (path.isEmpty) return;
 
-    // 🔥🔥 여기 추가 (핵심)
-    _webViewController?.evaluateJavascript(
-      source: "alert('URI: ${uri.toString()}\\nPATH: $path');",
-    );
-
     Future.delayed(const Duration(milliseconds: 200), () {
       _NotificationRouter.handle(path);
     });
@@ -1613,21 +1608,6 @@ fetch('/result/member_login_ok.php', {
                       valueColor: AlwaysStoppedAnimation<Color>(
                         Color(0xFF00CD00),
                       ),
-                    ),
-                  ),
-                ),
-              // 🔥 여기 추가
-              if (_debugUri.isNotEmpty)
-                Positioned(
-                  top: 50,
-                  left: 10,
-                  right: 10,
-                  child: Container(
-                    color: Colors.black.withOpacity(0.7),
-                    padding: const EdgeInsets.all(8),
-                    child: Text(
-                      _debugUri,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
                 ),
