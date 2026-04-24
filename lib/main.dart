@@ -251,19 +251,24 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   }
 
   void _handleDeepLink(Uri uri) {
-    String path;
+    String path = "";
 
-    if (uri.host.isNotEmpty) {
-      path = "/${uri.host}${uri.path}";
+    // 🔥 iOS 대응 (query 방식)
+    if (uri.queryParameters['url'] != null) {
+      path = uri.queryParameters['url']!;
     } else {
-      path = uri.path;
+      // 기존 방식 (Android)
+      if (uri.host.isNotEmpty) {
+        path = "/${uri.host}${uri.path}";
+      } else {
+        path = uri.path;
+      }
+
+      if (uri.query.isNotEmpty) {
+        path += '?${uri.query}';
+      }
     }
 
-    if (uri.query.isNotEmpty) {
-      path += '?${uri.query}';
-    }
-
-    // 🔥 약간의 딜레이로 안정화 (iOS 핵심)
     Future.delayed(const Duration(milliseconds: 200), () {
       _NotificationRouter.handle(path);
     });
