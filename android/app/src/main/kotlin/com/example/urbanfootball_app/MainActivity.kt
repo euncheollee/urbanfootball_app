@@ -1,23 +1,27 @@
 package com.urbanfootball.app
 
 import android.content.ContentValues
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import androidx.annotation.NonNull
+import android.util.Base64
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.OutputStream
-import android.util.Base64
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "urbanfootball/gallery"
 
-    override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
+    private val GALLERY_CHANNEL = "urbanfootball/gallery"
+    private val DEEP_LINK_CHANNEL = "deeplink_channel"
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        // 🔥 기존 갤러리 코드 유지
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, GALLERY_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method == "saveImageToGallery") {
                     val base64 = call.argument<String>("base64")
@@ -31,11 +35,7 @@ class MainActivity: FlutterActivity() {
                     try {
                         val bytes = Base64.decode(base64, Base64.DEFAULT)
                         val saved = saveImage(bytes, fileName)
-                        if (saved) {
-                            result.success("ok")
-                        } else {
-                            result.success("fail")
-                        }
+                        result.success(if (saved) "ok" else "fail")
                     } catch (e: Exception) {
                         result.success("error: ${e.message}")
                     }
@@ -43,6 +43,30 @@ class MainActivity: FlutterActivity() {
                     result.notImplemented()
                 }
             }
+
+        // 🔥 앱 실행 시 딥링크 처리
+        handleDeepLink(intent, flutterEngine)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        flutterEngine?.let {
+            handleDeepLink(intent, it)
+        }
+    }
+
+    private fun handleDeepLink(intent: Intent?, engine: FlutterEngine) {
+        val data: Uri? = intent?.data
+
+        if (data != null) {
+            val link = data.toString()
+
+            MethodChannel(
+                engine.dartExecutor.binaryMessenger,
+                DEEP_LINK_CHANNEL
+            ).invokeMethod("onDeepLink", link)
+        }
     }
 
     private fun saveImage(bytes: ByteArray, fileName: String): Boolean {

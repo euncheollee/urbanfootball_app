@@ -256,22 +256,40 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   }
 
   void _handleDeepLink(Uri uri) {
+    print("🔥🔥 _handleDeepLink 진입함");
+    print("🔥 raw uri: $uri");
+    print("🔥 scheme: ${uri.scheme}");
+    print("🔥 host: ${uri.host}");
+    print("🔥 path: ${uri.path}");
+    print("🔥 query: ${uri.query}");
+    print("🔥 fragment: ${uri.fragment}");
+
     setState(() {
       _debugUri = uri.toString();
     });
 
     String path = "";
 
+    // 1️⃣ query
     if (uri.queryParameters.containsKey('url')) {
+      print("🔥 query 방식 진입");
       path = uri.queryParameters['url']!;
-    } else if (uri.scheme.startsWith('http')) {
+    }
+    // 2️⃣ http
+    else if (uri.scheme.startsWith('http')) {
+      print("🔥 http 방식 진입");
+
       path = uri.path;
 
       if (uri.queryParameters.isNotEmpty) {
         final query = Uri(queryParameters: uri.queryParameters).query;
         path += '?$query';
       }
-    } else {
+    }
+    // 3️⃣ 일반 (intent / scheme)
+    else {
+      print("🔥 일반 path 방식 진입");
+
       if (uri.host.isNotEmpty) {
         path = "/${uri.host}${uri.path}";
       } else {
@@ -284,9 +302,15 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
       }
     }
 
-    if (path.isEmpty) return;
+    print("🔥 최종 path: $path");
+
+    if (path.isEmpty) {
+      print("❌ path 비어있음 → 종료");
+      return;
+    }
 
     Future.delayed(const Duration(milliseconds: 200), () {
+      print("🔥 라우터 호출: $path");
       _NotificationRouter.handle(path);
     });
   }
