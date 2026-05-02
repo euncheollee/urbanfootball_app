@@ -2,7 +2,7 @@ name: urbanfootball_app
 description: "UrbanFootball WebView App"
 publish_to: 'none'
 
-version: 1.0.1+6
+version: 1.0.1+7
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
@@ -71,3 +71,5 @@ flutter_native_splash:
 
 flutter:
   uses-material-design: true
+  assets:
+  - assets/images/offline.png

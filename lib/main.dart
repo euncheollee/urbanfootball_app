@@ -123,7 +123,7 @@ class _NotificationRouter {
   static InAppWebViewController? _controller;
   static String? _queuedUrl;
 
-  static const String _baseUrl = 'https://urbanfootball.co.kr';
+  static const String _baseUrl = 'https://www.urbanfootball.co.kr';
 
   static String _normalize(String url) {
     if (url.startsWith('http')) return url;
@@ -200,11 +200,11 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
   static const MethodChannel _galleryChannel = MethodChannel(
     'urbanfootball/gallery',
   );
-  static const String _baseUrl = 'https://urbanfootball.co.kr';
+  static const String _baseUrl = 'https://www.urbanfootball.co.kr';
   static const String _homeUrl =
-      'https://urbanfootball.co.kr/m/main/index.html';
+      'https://www.urbanfootball.co.kr/m/main/index.html';
   static const String _loginUrl =
-      'https://urbanfootball.co.kr/m/member/member_login.html';
+      'https://www.urbanfootball.co.kr/m/member/member_login.html';
   String _startUrl = _loginUrl;
 
   String? _pendingDeepLink;
@@ -719,6 +719,7 @@ fetch('/result/member_login_ok.php', {
               InAppWebView(
                 initialUrlRequest: URLRequest(url: WebUri(_startUrl)),
                 initialSettings: InAppWebViewSettings(
+                  disableDefaultErrorPage: true,
                   javaScriptEnabled: true,
                   mediaPlaybackRequiresUserGesture: false,
                   useHybridComposition: true,
@@ -1272,6 +1273,20 @@ fetch('/result/member_login_ok.php', {
                       return null;
                     },
                   );
+                  controller.addJavaScriptHandler(
+                    handlerName: 'reloadApp',
+                    callback: (args) async {
+                      await controller.loadUrl(
+                        urlRequest: URLRequest(
+                          url: WebUri(
+                            'https://www.urbanfootball.co.kr/m/main/index.html',
+                          ),
+                        ),
+                      );
+
+                      return null;
+                    },
+                  );
 
                   /// 🔥🔥 여기 추가 (로그아웃)
                   controller.addJavaScriptHandler(
@@ -1409,6 +1424,151 @@ fetch('/result/member_login_ok.php', {
                     const Duration(milliseconds: 300),
                   ); // 🔥 추가
                   await _waitAndSyncBadge();
+                },
+                onReceivedError: (controller, request, error) async {
+                  // 메인 프레임만 처리
+                  if (request.isForMainFrame != true) {
+                    return;
+                  }
+                  final bytes = await rootBundle.load(
+                    'assets/images/offline.png',
+                  );
+
+                  final base64Image = base64Encode(bytes.buffer.asUint8List());
+                  String errorHtml =
+                      """
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <style>
+
+      body{
+        margin:0;
+        padding:0;
+        background:#ffffff;
+
+        font-family:sans-serif;
+
+        display:flex;
+        justify-content:center;
+        align-items:center;
+
+        height:100vh;
+      }
+
+      .wrap{
+        text-align:center;
+        padding:30px;
+      }
+
+      .icon{
+        font-size:72px;
+        color:#d7d7e2;
+      }
+
+      .title{
+        margin-top:20px;
+
+        font-size:22px;
+        font-weight:700;
+
+        color:#333333;
+      }
+
+      .desc{
+        margin-top:16px;
+
+        font-size:15px;
+        line-height:1.6;
+
+        color:#8c8c96;
+      }
+
+      .btn{
+        margin-top:30px;
+
+        background:#00cd00;
+        color:white;
+
+        border:none;
+        border-radius:999px;
+
+        padding:14px 30px;
+
+        font-size:15px;
+        font-weight:600;
+      }
+      .loader{
+        width:36px;
+        height:36px;
+
+        border:4px solid #e5e5e5;
+        border-top:4px solid #00cd00;
+
+        border-radius:50%;
+
+        animation:spin 1s linear infinite;
+
+        margin:auto;
+      }
+
+      @keyframes spin{
+        0%{
+          transform:rotate(0deg);
+        }
+
+        100%{
+          transform:rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+
+    <div class="wrap">
+
+      <div class="icon">
+        <img src="data:image/png;base64,$base64Image"
+            width="90">
+      </div>
+
+      <div class="title">
+        오프라인 상태인가요?
+      </div>
+
+      <div class="desc">
+        네트워크 연결 상태를 확인 후<br>
+        다시 시도해주세요.
+      </div>
+
+    <button class="btn"
+    onclick="
+    document.getElementById('loading').style.display='block';
+    this.style.display='none';
+    window.flutter_inappwebview.callHandler('reloadApp');
+    ">
+      새로고침
+    </button>
+
+    <div id="loading" style="display:none; margin-top:30px;">
+      <div class="loader"></div>
+    </div>
+
+    </div>
+
+  </body>
+  </html>
+  """;
+
+                  await controller.loadData(
+                    data: errorHtml,
+                    mimeType: "text/html",
+                    encoding: "utf-8",
+                  );
                 },
                 androidOnPermissionRequest:
                     (controller, origin, resources) async {
