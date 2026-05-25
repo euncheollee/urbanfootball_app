@@ -1297,7 +1297,25 @@ fetch('/result/member_login_ok.php', {
 
                       // 2. 🔥 쿠키 삭제 (핵심)
                       final cookieManager = CookieManager.instance();
-                      await cookieManager.deleteAllCookies();
+
+                      final cookies = await cookieManager.getCookies(
+                        url: WebUri("https://www.urbanfootball.co.kr"),
+                      );
+
+                      for (final cookie in cookies) {
+                        final name = cookie.name;
+
+                        // 🔥 popup 쿠키는 유지
+                        if (name.startsWith("uf_popup_hide_")) {
+                          continue;
+                        }
+
+                        // 🔥 나머지는 삭제
+                        await cookieManager.deleteCookie(
+                          url: WebUri("https://www.urbanfootball.co.kr"),
+                          name: name,
+                        );
+                      }
 
                       // 3. WebView 저장소 삭제
                       await _webViewController?.evaluateJavascript(
