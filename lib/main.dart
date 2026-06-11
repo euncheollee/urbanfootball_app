@@ -317,7 +317,7 @@ class _WebViewPageState extends State<WebViewPage> with WidgetsBindingObserver {
 
   void _startBadgeRecoveryLoop() {
     Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 3));
+      await Future.delayed(const Duration(seconds: 60));
 
       final rawUserId = await _webViewController?.evaluateJavascript(
         source: "window.LOGIN_USER_ID",
