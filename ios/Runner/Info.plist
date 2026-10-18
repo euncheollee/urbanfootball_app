@@ -70,6 +70,14 @@
 					<string>kakaoc4eccd1ba39a995ee1e328d590538e0f</string>
 				</array>
 			</dict>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>urbanfootball</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>urbanfootball</string>
+				</array>
+			</dict>
 		</array>
 		<key>FirebaseMessagingAutoInitEnabled</key>
 		<true/>
@@ -81,18 +89,5 @@
 		<true/>		
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>이미지를 사진 라이브러리에 저장하기 위해 권한이 필요합니다.</string>
-
-		<key>CFBundleURLTypes</key>
-		<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>urbanfootball</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-			<string>urbanfootball</string>
-			</array>
-		</dict>
-		</array>
-
 	</dict>
 </plist>
